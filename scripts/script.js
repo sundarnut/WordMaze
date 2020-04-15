@@ -1,5 +1,5 @@
 var letters = "SLLEWOTNSLETEHOOTAKECRIBCBDAKLUQUAYEBARCPALADNASB";
-var words = ["SNORKEL","TOWEL","BUCKET","KITE","TABLE","SPADE","SANDAL","SAND","QUAY","BAY","YACHT"]
+var words = ["SNORKEL","TOWEL","BUCKET","KITE","TABLE","SPADE","SANDAL","SAND","QUAY","BAY","YACHT"];
 var rowLength = 7;
 var columnLength = rowLength;
 var mazeCount = letters.length;
