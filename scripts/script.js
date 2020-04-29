@@ -23,7 +23,10 @@ Added 35 11 for TABLE
 var letters = "SLLEWOTNSLETEHOOTAKECRIBCBDAKLUQUAYEBARCPALADNASB";
 
 // Words that you need to search in the grid
-var words = ["TOWEL", "SANDAL", "BAY", "YACHT", "BUCKET", "KITE", "SPADE", "BALL", "CUP", "SNORKEL", "QUAY", "SAND", "CUP", "SOIL", "TEA", "CRAB", "TABLE"];
+var inputWords = ["TOWEL", "SANDAL", "BAY", "YACHT", "BUCKET", "KITE", "SPADE", "BALL", "CUP", "SNORKEL", "QUAY", "SAND", "CUP", "SOIL", "TEA", "CRAB", "TABLE"];
+
+// Purified Words
+var words = new Array();
 
 // Define empty object that will store solution
 var solution = {};
@@ -49,11 +52,20 @@ var resetList = new Array();
 // List of all indices that form a straight line - horizontal, vertical or diagonal
 var linearList = new Array();
 
+// Offset arrays will store all the near rectangles that correspond to a dragged mouse
+var offsetArrays = new Array();
+
 // Inside index is set when we focus on a certain letter as we move the mouse
 var insideIndex = -1;
 
 // Select index stores the position where we pressed the mouse button
 var selectIndex = -1;
+
+// Last Selected index stores the position where we released the mouse button
+var lastSelectedIndex = -1;
+
+// What is the direction in which we are moving? 1 through 8 for clock positions 12:00 through 10:30, clockwise
+var factor = 0;
 
 // Where is the canvas present on the HTML page?
 var canvasLocation = null;
@@ -74,6 +86,7 @@ var highlightFont = "bold 24pt Courier";
 
 function renderCanvas() {
     checkCanvasForConsistency();
+    normalizeInputWords();
     solveMaze();
 
     var canvas = document.getElementById("mazeCanvas");
@@ -109,7 +122,6 @@ function renderCanvas() {
         }
 
         var c = letters.charAt(i);
-        // console.log("Filling " + letters.charAt(i) + " at " + x + " " + y);
         context.fillText(c, x, y);
 
         colorIndices.push(defaultColor);
@@ -128,23 +140,150 @@ function renderCanvas() {
 function doMouseDown(event) {
 
     var canvas = document.getElementById("mazeCanvas");
-
     canvasLocation = canvas.getBoundingClientRect();
 
-    canvas_x = event.x - canvasLocation.left;
-    canvas_y = event.y - canvasLocation.top;
+    var canvas_x = parseInt(event.x - canvasLocation.left);
+    var canvas_y = parseInt(event.y - canvasLocation.top);
+
+    downEvent(canvas_x, canvas_y);
+}
+
+function doMouseUp(event) {
+
+    var canvas = document.getElementById("mazeCanvas");
+    canvasLocation = canvas.getBoundingClientRect();
+
+    var canvas_x = parseInt(event.x - canvasLocation.left);
+    var canvas_y = parseInt(event.y - canvasLocation.top);
+
+    upEvent(canvas_x, canvas_y);
+}
+
+function doMouseMove(event) {
+
+    var canvas = document.getElementById("mazeCanvas");
+    canvasLocation = canvas.getBoundingClientRect();
+
+    var canvas_x = parseInt(event.x - canvasLocation.left);
+    var canvas_y = parseInt(event.y - canvasLocation.top);
+
+    var txtCoord = document.getElementById("txtCoord");
+    txtCoord.value = canvas_x + " " + canvas_y;
+
+    if (mousePressed) {
+        dragMoveEvent(canvas_x, canvas_y);
+
+        return;
+    }
 
     var x_offset = parseInt(canvas_x / 40);
     var y_offset = parseInt(canvas_y / 40) + 1;
 
-    if ((canvas_x > (40 * x_offset)) &&
-        (canvas_x < (40 * x_offset) + 16) &&
-        (canvas_y > (40 * y_offset) - 16) &&
-        (canvas_y < (40 * y_offset) + 4)) {
+    if ((canvas_x < 22) || (canvas_x > xLimit) || (canvas_y > yLimit)) {
+
+        if (insideIndex != -1) {
+
+            x_offset = (parseInt(insideIndex % columnCount) + 1) * 40;
+            y_offset = (parseInt(insideIndex / columnCount) + 1) * 40;
+
+            var context = canvas.getContext("2d");
+            context.fillStyle = "white";
+            context.fillRect(x_offset, y_offset - 20, 26, 26);
+
+            context.font = defaultFont;
+            context.fillStyle = colorIndices[insideIndex];
+            context.fillText(letters.charAt(insideIndex), x_offset, y_offset);
+
+            insideIndex = -1;
+        }
+
+        return;
+    }
+
+    if ((canvas_x >= (40 * x_offset)) &&
+        (canvas_x <= (40 * x_offset) + 18) &&
+        (canvas_y >= (40 * y_offset) - 18) &&
+        (canvas_y <= (40 * y_offset))) {
+
+        if (insideIndex == -1) {
+            insideIndex = ((y_offset - 1) * rowCount + (x_offset - 1));
+
+            var context = canvas.getContext("2d");
+            context.fillStyle = "white";
+            context.fillRect(x_offset * 40, y_offset * 40 - 20, 26, 26);
+
+            context.font = highlightFont;
+            context.fillStyle = highlightColor;
+            context.fillText(letters.charAt(insideIndex), x_offset * 40, y_offset * 40);
+        }
+    } else if (insideIndex != -1) {
+
+        x_offset = (parseInt(insideIndex % columnCount) + 1) * 40;
+        y_offset = (parseInt(insideIndex / columnCount) + 1) * 40;
+
+        var context = canvas.getContext("2d");
+        context.fillStyle = "white";
+        context.fillRect(x_offset, y_offset - 20, 26, 26);
+
+        context.font = fontIndices[insideIndex];
+        context.fillStyle = colorIndices[insideIndex];
+        context.fillText(letters.charAt(insideIndex), x_offset, y_offset);
+
+        insideIndex = -1;
+    }
+}
+
+function doTouchStart(event) {
+
+    var canvas = document.getElementById("mazeCanvas");
+    canvasLocation = canvas.getBoundingClientRect();
+
+    var canvas_x = parseInt(event.targetTouches[0].pageX - canvasLocation.left);
+    var canvas_y = parseInt(event.targetTouches[0].pageY - canvasLocation.top);
+
+    downEvent(canvas_x, canvas_y);
+}
+
+function doTouchMove(event) {
+
+    var canvas = document.getElementById("mazeCanvas");
+    canvasLocation = canvas.getBoundingClientRect();
+
+    var canvas_x = parseInt(event.targetTouches[0].pageX - canvasLocation.left);
+    var canvas_y = parseInt(event.targetTouches[0].pageY - canvasLocation.top);
+
+    dragMoveEvent(canvas_x, canvas_y);
+}
+
+function doTouchEnd(event) {
+
+    var canvas = document.getElementById("mazeCanvas");
+    canvasLocation = canvas.getBoundingClientRect();
+
+    var canvas_x = parseInt(event.targetTouches[0].pageX - canvasLocation.left);
+    var canvas_y = parseInt(event.targetTouches[0].pageY - canvasLocation.top);
+
+    upEvent(canvas_x, canvas_y);
+}
+
+function downEvent(canvas_x, canvas_y) {
+
+    var canvas = document.getElementById("mazeCanvas");
+
+    var x_offset = parseInt(canvas_x / 40);
+    var y_offset = parseInt(canvas_y / 40) + 1;
+
+    if ((canvas_x >= (40 * x_offset)) &&
+        (canvas_x <= (40 * x_offset) + 18) &&
+        (canvas_y >= (40 * y_offset) - 18) &&
+        (canvas_y <= (40 * y_offset)) &&
+        (canvas_x >= 22) &&
+        (canvas_x < xLimit) &&
+        (canvas_y < yLimit)) {
 
         if (!mousePressed) {
             // Store coordinates in selectIndex
-            selectIndex = ((y_offset - 1) * rowCount + (x_offset - 1));
+            selectIndex = ((y_offset - 1) * columnCount + (x_offset - 1));
 
             var context = canvas.getContext("2d");
             context.fillStyle = "white";
@@ -152,38 +291,50 @@ function doMouseDown(event) {
 
             context.font = highlightFont;
             context.fillStyle = selectColor;
-
-            console.log("Filling red " + letters.charAt(selectIndex) + " at " + (x_offset * 40) + " " + (y_offset * 40));
             context.fillText(letters.charAt(selectIndex), x_offset * 40, y_offset * 40);
+
             mousePressed = true;
 
-            console.log("mouse down");
+            // Add area around this alphabet for the current one
+            offsetArrays.push(new Array((x_offset * 40) - 21, (y_offset * 40) - 40, (x_offset * 40) + 39, (y_offset * 40) + 22, selectIndex));
 
             // Look upwards - 12:00 hour hand
             var count = 1;
             var nextIndex = -1;
+
             while ((selectIndex - (columnCount * count)) >= 0) {
+
                 nextIndex = (selectIndex - (columnCount * count));
                 linearList.push(nextIndex);
-                console.log("NextIndex 1 : " + nextIndex);
                 linearList["C" + nextIndex] = columnCount;
+
                 count++;
 
-                if (nextIndex > columnCount) {
-                    // Add the rectangle on top of this to effect the same one
+                // Get x_index and y_index positions from nextIndex
+                var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
 
-                }
+                // Add the rectangle on top of this to effect the same one
+                offsetArrays.push(new Array(x_position, y_position - 40, x_position + 18, y_position - 18, nextIndex));
             }
 
             // Look sideways right upwards - 1:30 hour hand
             // Skip if you are at the last column in the row
             if (((selectIndex + 1) % columnCount) != 0) {
                 count = 1;
+
                 while ((selectIndex - ((columnCount - 1) * count)) > 0) {
+
                     nextIndex = (selectIndex - ((columnCount - 1) * count));
                     linearList.push(nextIndex);
-                    console.log("NextIndex: " + nextIndex);
                     linearList["C" + nextIndex] = columnCount - 1;
+
+                    // Get x_index and y_index positions from nextIndex
+                    var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                    var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                    // Add the rectangle on top right of this to effect the same one
+                    offsetArrays.push(new Array(x_position + 13, y_position - 45, x_position + 45, y_position - 13, nextIndex));
 
                     // Break at the right boundary, we cannot move ahead from this point
                     if ((((selectIndex - ((columnCount - 1) * count)) + 1) % columnCount) == 0) {
@@ -197,8 +348,17 @@ function doMouseDown(event) {
             // Walk right - 3:00 pm hour hand
             nextIndex = selectIndex + 1;
             while ((nextIndex % columnCount) > 0) {
+
                 linearList.push(nextIndex);
                 linearList["C" + nextIndex] = 1;
+
+                // Get x_index and y_index positions from nextIndex
+                var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                // Add the rectangle to the right of this to effect the same one
+                offsetArrays.push(new Array(x_position + 19, y_position - 18, x_position + 39, y_position, nextIndex));
+
                 nextIndex++;
             }
 
@@ -206,11 +366,18 @@ function doMouseDown(event) {
             // Skip if you are at the last column in the row
             if (((selectIndex + 1) % columnCount) != 0) {
                 count = 1;
+
                 while ((selectIndex + ((columnCount + 1) * count)) < mazeCount) {
                     nextIndex = (selectIndex + ((columnCount + 1) * count));
                     linearList.push(nextIndex);
-                    console.log("NextIndex: " + nextIndex);
                     linearList["C" + nextIndex] = columnCount + 1;
+
+                    // Get x_index and y_index positions from nextIndex
+                    var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                    var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                    // Add the rectangle to the bottom right of this to effect the same one
+                    offsetArrays.push(new Array(x_position + 13, y_position - 5, x_position + 45, y_position + 26, nextIndex));
 
                     // Break at the right boundary, we cannot move ahead from this point
                     if ((((selectIndex + ((columnCount + 1) * count)) + 1) % columnCount) == 0) {
@@ -223,23 +390,38 @@ function doMouseDown(event) {
 
             // Look downwards - 6:00 hour hand
             count = 1;
+
             while ((selectIndex + (columnCount * count)) < mazeCount) {
                 nextIndex = (selectIndex + columnCount * count);
                 linearList.push(nextIndex);
-                console.log("NextIndex: " + nextIndex);
                 linearList["C" + nextIndex] = columnCount;
+
                 count++;
+
+                // Get x_index and y_index positions from nextIndex
+                var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                // Add the rectangle on bottom of this to effect the same one
+                offsetArrays.push(new Array(x_position, y_position, x_position + 18, y_position + 23, nextIndex));
             }
 
             // Look sideways left downwards - 7:30 pm hour hand
             // Skip if you are at the first column in the row
             if ((selectIndex % columnCount) != 0) {
                 count = 1;
+
                 while ((selectIndex + ((columnCount - 1) * count)) < mazeCount) {
                     nextIndex = (selectIndex + ((columnCount - 1) * count));
                     linearList.push(nextIndex);
-                    console.log("NextIndex: " + nextIndex);
                     linearList["C" + nextIndex] = columnCount - 1;
+
+                    // Get x_index and y_index positions from nextIndex
+                    var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                    var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                    // Add the rectangle to the right of this to effect the same one
+                    offsetArrays.push(new Array(x_position - 26, y_position - 5, x_position + 5, y_position + 26, nextIndex));
 
                     // Break at the left boundary, we cannot move ahead from this point
                     if ((nextIndex % columnCount) == 0) {
@@ -258,8 +440,15 @@ function doMouseDown(event) {
                 do {
                     nextIndex--;
                     linearList.push(nextIndex);
-                    console.log("NextIndex: " + nextIndex);
                     linearList["C" + nextIndex] = 1;
+
+                    // Get x_index and y_index positions from nextIndex
+                    var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                    var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                    // Add the rectangle to the right of this to effect the same one
+                    offsetArrays.push(new Array(x_position - 21, y_position - 18, x_position - 1, y_position, nextIndex));
+
                 } while ((nextIndex % columnCount) > 0);
             }
 
@@ -267,11 +456,18 @@ function doMouseDown(event) {
             // Skip if you are at the first column in the row
             if ((selectIndex % columnCount) != 0) {
                 count = 1;
+
                 while ((selectIndex - ((columnCount + 1) * count)) >= 0) {
                     nextIndex = (selectIndex - ((columnCount + 1) * count));
                     linearList.push(nextIndex);
-                    console.log("NextIndex: " + nextIndex);
                     linearList["C" + nextIndex] = columnCount + 1;
+
+                    // Get x_index and y_index positions from nextIndex
+                    var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                    var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                    // Add the rectangle to the right of this to effect the same one
+                    offsetArrays.push(new Array(x_position - 26, y_position - 45, x_position + 5, y_position - 13, nextIndex));
 
                     // Break at the left boundary, we cannot move ahead from this point
                     if ((nextIndex % columnCount) == 0) {
@@ -285,44 +481,95 @@ function doMouseDown(event) {
     }
 }
 
-function doMouseUp(event) {
-    mousePressed = false;
-    resetList = new Array();
-    linearList = new Array();
-    console.log("mouse up");
-}
-
-function doMouseMove(event) {
+function dragMoveEvent(canvas_x, canvas_y) {
 
     var canvas = document.getElementById("mazeCanvas");
-
-    canvasLocation = canvas.getBoundingClientRect();
-
-    var canvas_x = event.x - canvasLocation.left;
-    var canvas_y = event.y - canvasLocation.top;
-
     var x_offset = parseInt(canvas_x / 40);
     var y_offset = parseInt(canvas_y / 40) + 1;
 
-    var txtCoord = document.getElementById("txtCoord");
-    txtCoord.value = canvas_x + " " + canvas_y;
+    if ((canvas_x >= (40 * x_offset)) &&
+        (canvas_x <= (40 * x_offset) + 18) &&
+        (canvas_y >= (40 * y_offset) - 18) &&
+        (canvas_y <= (40 * y_offset)) &&
+        (canvas_x >= 22) &&
+        (canvas_x < xLimit) &&
+        (canvas_y < yLimit)) {
 
-    if (mousePressed) {
-        if ((canvas_x > (40 * x_offset)) &&
-            (canvas_x < (40 * x_offset) + 16) &&
-            (canvas_y > (40 * y_offset) - 16) &&
-            (canvas_y < (40 * y_offset) + 4)) {
+        var currentIndex = ((y_offset - 1) * rowCount + (x_offset - 1));
 
-            var currentIndex = ((y_offset - 1) * rowCount + (x_offset - 1));
-            if (linearList.includes(currentIndex)) {
+        if (linearList.includes(currentIndex)) {
+
+            // Flush all prior highlights as user could be moving mouse in and out of current line
+            for (var i = 0; i < resetList.length; i++) {
+
+                var x_position = (parseInt(resetList[i] % columnCount) + 1) * 40;
+                var y_position = (parseInt(resetList[i] / columnCount) + 1) * 40;
+
+                var context = canvas.getContext("2d");
+                context.fillStyle = "white";
+                context.fillRect(x_position, y_position - 20, 26, 26);
+
+                context.font = fontIndices[resetList[i]];
+                context.fillStyle = colorIndices[resetList[i]];
+                context.fillText(letters.charAt(resetList[i]), x_position, y_position);
+            }
+
+            if (resetList.length > 0) {
+                resetList = new Array();
+            }
+
+            // Find difference between currentIndex and selectIndex
+            var difference = Math.abs(currentIndex - selectIndex);
+            factor = linearList["C" + currentIndex];
+
+            if (factor > 0) {
+                var nextIndex = (currentIndex > selectIndex) ? selectIndex : currentIndex;
+                var counter = 0;
+
+                do {
+                    counter += factor;
+
+                    if (nextIndex != selectIndex) {
+                        var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
+                        var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
+
+                        var context = canvas.getContext("2d");
+                        context.fillStyle = "white";
+                        context.fillRect(x_position, y_position - 20, 26, 26);
+
+                        context.font = highlightFont;
+                        context.fillStyle = selectColor;
+                        context.fillText(letters.charAt(nextIndex), x_position, y_position);
+
+                        lastSelectedIndex = nextIndex;
+
+                        resetList.push(nextIndex);
+                    }
+
+                    nextIndex += factor;
+                } while (counter <= difference);
+            }
+
+            return;
+        }
+    } else {
+        var foundOnLine = false;
+
+        for (var i = 0; i < offsetArrays.length; i++) {
+            // Check if user is dragging between letters on the line
+            if ((canvas_x >= offsetArrays[i][0]) &&
+                (canvas_x <= offsetArrays[i][2]) &&
+                (canvas_y >= offsetArrays[i][1]) &&
+                (canvas_y <= offsetArrays[i][3])) {
+
+                foundOnLine = true;
+                lastSelectedIndex = offsetArrays[i][4];
 
                 // Flush all prior highlights as user could be moving mouse in and out of current line
                 for (var i = 0; i < resetList.length; i++) {
-                    console.log("resetList is not empty!");
+
                     var x_position = (parseInt(resetList[i] % columnCount) + 1) * 40;
                     var y_position = (parseInt(resetList[i] / columnCount) + 1) * 40;
-
-                    console.log("x_position is " + x_position + " and y_position is " + y_position);
 
                     var context = canvas.getContext("2d");
                     context.fillStyle = "white";
@@ -330,30 +577,26 @@ function doMouseMove(event) {
 
                     context.font = fontIndices[resetList[i]];
                     context.fillStyle = colorIndices[resetList[i]];
-
-                    console.log("Filling " + letters.charAt(resetList[i]) + " at " + x_position + " " + y_position);
                     context.fillText(letters.charAt(resetList[i]), x_position, y_position);
                 }
 
                 if (resetList.length > 0) {
-                    console.log("Resetting array VOILAAAAAAAAA");
                     resetList = new Array();
                 }
 
                 // Find difference between currentIndex and selectIndex
-                var difference = Math.abs(currentIndex - selectIndex);
-                var factor = linearList["C" + currentIndex];
-
-                console.log("factor is " + factor);
+                var difference = Math.abs(lastSelectedIndex - selectIndex);
+                factor = linearList["C" + lastSelectedIndex];
 
                 if (factor > 0) {
-                    var nextIndex = (currentIndex > selectIndex) ? selectIndex : currentIndex;
+                    var nextIndex = (lastSelectedIndex > selectIndex) ? selectIndex : lastSelectedIndex;
                     var counter = 0;
 
                     do {
                         counter += factor;
 
                         if (nextIndex != selectIndex) {
+
                             var x_position = (parseInt(nextIndex % columnCount) + 1) * 40;
                             var y_position = (parseInt(nextIndex / columnCount) + 1) * 40;
 
@@ -363,8 +606,6 @@ function doMouseMove(event) {
 
                             context.font = highlightFont;
                             context.fillStyle = selectColor;
-
-                            console.log("02 Filling " + letters.charAt(nextIndex) + " at " + x_position + " " + y_position);
                             context.fillText(letters.charAt(nextIndex), x_position, y_position);
 
                             resetList.push(nextIndex);
@@ -373,106 +614,102 @@ function doMouseMove(event) {
                         nextIndex += factor;
                     } while (counter <= difference);
                 }
-            } else {
-                // Flush all as we are inside another alphabet that is outside the current valid line-paths
-                for (var i = 0; i < resetList.length; i++) {
-                    console.log("Resetlist has " + resetList.length + " elements");
-                    var x_position = (parseInt(resetList[i] % columnCount) + 1) * 40;
-                    var y_position = (parseInt(resetList[i] / columnCount) + 1) * 40;
 
-                    console.log("x_position is " + x_position + " and y_position is " + y_position);
-
-                    var context = canvas.getContext("2d");
-                    context.fillStyle = "white";
-                    context.fillRect(x_position, y_position - 20, 26, 26);
-
-                    context.font = fontIndices[resetList[i]];
-                    context.fillStyle = colorIndices[resetList[i]];
-
-                    console.log("Filling " + letters.charAt(resetList[i]) + " at " + x_position + " " + y_position);
-                    context.fillText(letters.charAt(resetList[i]), x_position, y_position);
-                }
-
-                if (resetList.length > 0) {
-                    resetList = new Array();
-                }
+                break;
             }
         }
-        return;
     }
 
-    if ((canvas_x < 35) || (canvas_x > xLimit) || (canvas_y > yLimit)) {
+    if (!foundOnLine) {
+        // Flush all as we are somewhere outside the current valid line-paths
+        for (var i = 0; i < resetList.length; i++) {
 
-        if (insideIndex != -1) {
-
-            x_offset = (parseInt(insideIndex % columnCount) + 1) * 40;
-            y_offset = (parseInt(insideIndex / columnCount) + 1) * 40;
+            var x_position = (parseInt(resetList[i] % columnCount) + 1) * 40;
+            var y_position = (parseInt(resetList[i] / columnCount) + 1) * 40;
 
             var context = canvas.getContext("2d");
             context.fillStyle = "white";
-            context.fillRect(x_offset, y_offset - 20, 26, 26);
+            context.fillRect(x_position, y_position - 20, 26, 26);
 
-            context.font = defaultFont;
-            context.fillStyle = colorIndices[insideIndex];
-
-            console.log("Filling " + letters.charAt(insideIndex) + " at " + x_offset + " " + y_offset);
-            context.fillText(letters.charAt(insideIndex), x_offset, y_offset);
-
-            insideIndex = -1;
+            context.font = fontIndices[resetList[i]];
+            context.fillStyle = colorIndices[resetList[i]];
+            context.fillText(letters.charAt(resetList[i]), x_position, y_position);
         }
 
-        return;
+        if (resetList.length > 0) {
+            resetList = new Array();
+        }
+    }
+}
+
+function upEvent(canvas_x, canvas_y) {
+
+    var canvas = document.getElementById("mazeCanvas");
+
+    var x_offset = parseInt(canvas_x / 40);
+    var y_offset = parseInt(canvas_y / 40) + 1;
+
+    var canvas = document.getElementById("mazeCanvas");
+
+    var x_offset = parseInt(canvas_x / 40);
+    var y_offset = parseInt(canvas_y / 40) + 1;
+
+    var releaseIndex = -1;
+
+    if ((mousePressed) &&
+        (canvas_x >= (40 * x_offset)) &&
+        (canvas_x <= (40 * x_offset) + 18) &&
+        (canvas_y >= (40 * y_offset) - 18) &&
+        (canvas_y <= (40 * y_offset)) &&
+        (canvas_x >= 22) &&
+        (canvas_x < xLimit) &&
+        (canvas_y < yLimit)) {
+
+        // Store coordinates in releaseIndex
+        releaseIndex = ((y_offset - 1) * columnCount + (x_offset - 1));
     }
 
-    if ((canvas_x > (40 * x_offset)) &&
-        (canvas_x < (40 * x_offset) + 16) &&
-        (canvas_y > (40 * y_offset) - 16) &&
-        (canvas_y < (40 * y_offset) + 4)) {
+    if ((releaseIndex == -1) && (lastSelectedIndex != -1) && (lastSelectedIndex != selectIndex)) {
+        releaseIndex = lastSelectedIndex;
+    }
 
-        if (insideIndex == -1) {
-            insideIndex = ((y_offset - 1) * rowCount + (x_offset - 1));
+    if ((releaseIndex != -1) && (selectIndex != -1)) {
+        var lookup = selectIndex + " " + releaseIndex;
 
-            var context = canvas.getContext("2d");
-            context.fillStyle = "white";
-            context.fillRect(x_offset * 40, y_offset * 40 - 20, 26, 26);
-
-            context.font = highlightFont;
-            context.fillStyle = highlightColor;
-
-            console.log("Filling " + letters.charAt(insideIndex) + " at " + (x_offset * 40) + " " + (y_offset * 40));
-            context.fillText(letters.charAt(insideIndex), x_offset * 40, y_offset * 40);
+        // Check if we have a solution
+        if (lookup in solution) {
+            console.log("Found answer with factor: " + factor);
         }
-    } else if (insideIndex != -1) {
+    }
 
-        x_offset = (parseInt(insideIndex % columnCount) + 1) * 40;
-        y_offset = (parseInt(insideIndex / columnCount) + 1) * 40;
+    mousePressed = false;
 
-        console.log("Reset x_offset is " + x_offset + " and y_offset is " + y_offset);
+    if (selectIndex != -1) {
+        resetList.push(selectIndex);
+    }
 
+    // Flush all prior highlights as user could be moving mouse in and out of current line
+    for (var i = 0; i < resetList.length; i++) {
+
+        var x_position = (parseInt(resetList[i] % columnCount) + 1) * 40;
+        var y_position = (parseInt(resetList[i] / columnCount) + 1) * 40;
+
+        var canvas = document.getElementById("mazeCanvas");
         var context = canvas.getContext("2d");
         context.fillStyle = "white";
-        context.fillRect(x_offset, y_offset - 20, 26, 26);
+        context.fillRect(x_position, y_position - 20, 26, 26);
 
-        context.font = fontIndices[insideIndex];
-        context.fillStyle = colorIndices[insideIndex];
-
-        console.log("Filling " + letters.charAt(insideIndex) + " at " + x_offset + " " + y_offset);
-        context.fillText(letters.charAt(insideIndex), x_offset, y_offset);
-
-        insideIndex = -1;
+        context.font = fontIndices[resetList[i]];
+        context.fillStyle = colorIndices[resetList[i]];
+        context.fillText(letters.charAt(resetList[i]), x_position, y_position);
     }
-}
 
-function doTouchStart(event) {
-    console.log("Touch Start!");
-}
-
-function doTouchMove(event) {
-    console.log("Touch Move!");
-}
-
-function doTouchEnd(event) {
-    console.log("Touch End!");
+    resetList = new Array();
+    linearList = new Array();
+    offsetArrays = new Array();
+    selectIndex = -1;
+    lastSelectedIndex = -1;
+    factor = 0;
 }
 
 function checkCanvasForConsistency() {
@@ -485,22 +722,34 @@ function checkCanvasForConsistency() {
     }
 }
 
+function normalizeInputWords() {
+
+    for (var i = 0; i < inputWords.length; i++) {
+        words.push(inputWords[i].replace(/[^A-Z]/g, ''));
+    }
+}
+
 function solveMaze() {
 
     for (var i = 0; i < words.length; i++) {
 
         var wordLength = words[i].length;
-        var firstChar = words[i].charAt(0);
-        var secondChar = words[i].charAt(1);
 
-        var wordFound = false;
-
+        // TODO: Find words
         if (wordLength < 3) {
             alert("Two letter words are not permitted, " + words[i] + " will be skipped.");
             continue;
         }
 
+        var firstChar = words[i].charAt(0);
+        var secondChar = words[i].charAt(1);
+        var wordFound = false;
+
         // Walk backwards, forwards is boring
+        // There are no else clauses for the if, because we might find multiple occurences of
+        // the same word in the word matrix. We will index every one but the user can find the first
+        // one and claim the finding. You can include the same word twice in the words to find list,
+        // and ensure both get searched and found.
         for (var j = mazeCount - 1; j >= 0; j--) {
 
             // Check if the current alphabet is same as words[i].charAt(0);
@@ -560,7 +809,7 @@ function solveMaze() {
                 }
 
                 if ((((j % columnCount) + 1) >= wordLength) &&
-                    ((parseInt(j / columnCount) + 1 - wordLength) >= 0) &&                    (letters.charAt(j - columnCount - 1) == secondChar)) {
+                    ((parseInt(j / columnCount) + 1 - wordLength) >= 0) && (letters.charAt(j - columnCount - 1) == secondChar)) {
 
                     // Eligible for a 10:30 hour hand walk
                     wordFound = findWord(8, j, words[i], wordLength);
