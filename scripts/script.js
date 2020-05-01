@@ -28,6 +28,9 @@ var inputWords = ["TOWEL", "SANDAL", "BAY", "YACHT", "BUCKET", "KITE", "SPADE", 
 // Purified Words
 var words = new Array();
 
+// Store all the found words here
+var foundWords = new Array();
+
 // Define empty object that will store solution
 var solution = {};
 
@@ -55,6 +58,9 @@ var linearList = new Array();
 // Offset arrays will store all the near rectangles that correspond to a dragged mouse
 var offsetArrays = new Array();
 
+// Array of lines we need to draw
+var lineArrays = new Array();
+
 // Inside index is set when we focus on a certain letter as we move the mouse
 var insideIndex = -1;
 
@@ -81,8 +87,10 @@ var yLimit = 0;
 var defaultColor = "black";
 var highlightColor = "blue";
 var selectColor = "red";
+var foundColor = "green";
 var defaultFont = "24pt Courier";
 var highlightFont = "bold 24pt Courier";
+var selectFont = "24pt Courier";
 
 function renderCanvas() {
     checkCanvasForConsistency();
@@ -188,7 +196,7 @@ function doMouseMove(event) {
 
             var context = canvas.getContext("2d");
             context.fillStyle = "white";
-            context.fillRect(x_offset, y_offset - 20, 26, 26);
+            context.fillRect(x_offset - 2, y_offset - 22, 28, 28);
 
             context.font = defaultFont;
             context.fillStyle = colorIndices[insideIndex];
@@ -210,7 +218,7 @@ function doMouseMove(event) {
 
             var context = canvas.getContext("2d");
             context.fillStyle = "white";
-            context.fillRect(x_offset * 40, y_offset * 40 - 20, 26, 26);
+            context.fillRect(x_offset * 40 - 2, y_offset * 40 - 22, 28, 28);
 
             context.font = highlightFont;
             context.fillStyle = highlightColor;
@@ -223,7 +231,7 @@ function doMouseMove(event) {
 
         var context = canvas.getContext("2d");
         context.fillStyle = "white";
-        context.fillRect(x_offset, y_offset - 20, 26, 26);
+        context.fillRect(x_offset - 2, y_offset - 22, 28, 28);
 
         context.font = fontIndices[insideIndex];
         context.fillStyle = colorIndices[insideIndex];
@@ -287,7 +295,7 @@ function downEvent(canvas_x, canvas_y) {
 
             var context = canvas.getContext("2d");
             context.fillStyle = "white";
-            context.fillRect(x_offset * 40, y_offset * 40 - 20, 26, 26);
+            context.fillRect(x_offset * 40 - 2, y_offset * 40 - 22, 28, 28);
 
             context.font = highlightFont;
             context.fillStyle = selectColor;
@@ -507,7 +515,7 @@ function dragMoveEvent(canvas_x, canvas_y) {
 
                 var context = canvas.getContext("2d");
                 context.fillStyle = "white";
-                context.fillRect(x_position, y_position - 20, 26, 26);
+                context.fillRect(x_position - 2, y_position - 22, 28, 28);
 
                 context.font = fontIndices[resetList[i]];
                 context.fillStyle = colorIndices[resetList[i]];
@@ -535,7 +543,7 @@ function dragMoveEvent(canvas_x, canvas_y) {
 
                         var context = canvas.getContext("2d");
                         context.fillStyle = "white";
-                        context.fillRect(x_position, y_position - 20, 26, 26);
+                        context.fillRect(x_position - 2, y_position - 22, 28, 28);
 
                         context.font = highlightFont;
                         context.fillStyle = selectColor;
@@ -573,7 +581,7 @@ function dragMoveEvent(canvas_x, canvas_y) {
 
                     var context = canvas.getContext("2d");
                     context.fillStyle = "white";
-                    context.fillRect(x_position, y_position - 20, 26, 26);
+                    context.fillRect(x_position - 2, y_position - 22, 28, 28);
 
                     context.font = fontIndices[resetList[i]];
                     context.fillStyle = colorIndices[resetList[i]];
@@ -602,7 +610,7 @@ function dragMoveEvent(canvas_x, canvas_y) {
 
                             var context = canvas.getContext("2d");
                             context.fillStyle = "white";
-                            context.fillRect(x_position, y_position - 20, 26, 26);
+                            context.fillRect(x_position - 2, y_position - 22, 28, 28);
 
                             context.font = highlightFont;
                             context.fillStyle = selectColor;
@@ -629,7 +637,7 @@ function dragMoveEvent(canvas_x, canvas_y) {
 
             var context = canvas.getContext("2d");
             context.fillStyle = "white";
-            context.fillRect(x_position, y_position - 20, 26, 26);
+            context.fillRect(x_position - 2, y_position - 22, 28, 28);
 
             context.font = fontIndices[resetList[i]];
             context.fillStyle = colorIndices[resetList[i]];
@@ -678,7 +686,29 @@ function upEvent(canvas_x, canvas_y) {
 
         // Check if we have a solution
         if (lookup in solution) {
-            console.log("Found answer with factor: " + factor);
+            var foundWord = solution[lookup];
+
+            // Check if this word was previously found
+            if (foundWords.indexOf(foundWord) >= 0) {
+                console.log("Found this word before");
+            } else {
+                foundWords.push(foundWord);
+
+                var index = selectIndex;
+
+                if (releaseIndex < selectIndex) {
+                    index = releaseIndex;
+                }
+
+                var count = 0;
+
+                do {
+                    colorIndices[index] = foundColor;
+                    fontIndices[index] = selectFont;
+                    index += factor;
+                    count++;
+                } while (count < foundWord.length);
+            }
         }
     }
 
@@ -697,7 +727,7 @@ function upEvent(canvas_x, canvas_y) {
         var canvas = document.getElementById("mazeCanvas");
         var context = canvas.getContext("2d");
         context.fillStyle = "white";
-        context.fillRect(x_position, y_position - 20, 26, 26);
+        context.fillRect(x_position - 2, y_position - 22, 28, 28);
 
         context.font = fontIndices[resetList[i]];
         context.fillStyle = colorIndices[resetList[i]];
