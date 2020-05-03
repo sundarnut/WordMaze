@@ -682,17 +682,24 @@ function upEvent(canvas_x, canvas_y) {
     }
 
     if ((releaseIndex != -1) && (selectIndex != -1)) {
-        var lookup = selectIndex + " " + releaseIndex;
+
+        var lower = (selectIndex < releaseIndex) ? selectIndex : releaseIndex;
+        var upper = (selectIndex < releaseIndex) ? releaseIndex : selectIndex;
+ 
+        var lookup = lower + " " + upper;
+
+        console.log("Trying to lookup " + lookup);
 
         // Check if we have a solution
         if (lookup in solution) {
-            var foundWord = solution[lookup];
+            var foundWordIndex = solution[lookup];
 
             // Check if this word was previously found
-            if (foundWords.indexOf(foundWord) >= 0) {
+            if (foundWords[foundWordIndex] > 0) {
                 console.log("Found this word before");
             } else {
-                foundWords.push(foundWord);
+                var foundWord = words[foundWordIndex];
+                foundWords[foundWordIndex] = factor;
 
                 var index = selectIndex;
 
@@ -756,6 +763,10 @@ function normalizeInputWords() {
 
     for (var i = 0; i < inputWords.length; i++) {
         words.push(inputWords[i].replace(/[^A-Z]/g, ''));
+
+        // Use 0 as the position for the found word
+        // A non-zero value means this was found with a certain position
+        foundWords.push(0);
     }
 }
 
@@ -790,7 +801,7 @@ function solveMaze() {
                     (letters.charAt(j - columnCount) == secondChar)) {
 
                     // Find if we are eligible for a 12:00 hour hand walk
-                    wordFound = findWord(1, j, words[i], wordLength);
+                    wordFound = findWord(1, j, i, wordLength);
                 }
 
                 if ((((j % columnCount) + wordLength) <= columnCount) &&
@@ -798,14 +809,14 @@ function solveMaze() {
                     (letters.charAt(j - columnCount + 1) == secondChar)) {
 
                     // Eligible for a 1:30 hour hand walk
-                    wordFound = findWord(2, j, words[i], wordLength);
+                    wordFound = findWord(2, j, i, wordLength);
                 }
 
                 if ((((j % columnCount) + wordLength) <= columnCount) &&
                     (letters.charAt(j + 1) == secondChar)) {
 
                     // Eligible for a 3:00 hour hand walk
-                    wordFound = findWord(3, j, words[i], wordLength);
+                    wordFound = findWord(3, j, i, wordLength);
                 }
 
                 if ((((j % columnCount) + wordLength) <= columnCount) &&
@@ -813,14 +824,14 @@ function solveMaze() {
                     (letters.charAt(j + columnCount + 1) == secondChar)) {
 
                     // Eligible for a 4:30 hour hand walk
-                    wordFound = findWord(4, j, words[i], wordLength);
+                    wordFound = findWord(4, j, i, wordLength);
                 }
 
                 if (((parseInt(j / columnCount) + wordLength) <= rowCount) &&
                     (letters.charAt(j + columnCount) == secondChar)) {
 
                     // Eligible for a 6:00 hour hand walk
-                    wordFound = findWord(5, j, words[i], wordLength);
+                    wordFound = findWord(5, j, i, wordLength);
                 }
 
                 if ((((j % columnCount) + 1) >= wordLength) &&
@@ -828,30 +839,31 @@ function solveMaze() {
                     (letters.charAt(j + columnCount - 1) == secondChar)) {
 
                     // Eligible for a 7:30 hour hand walk
-                    wordFound = findWord(6, j, words[i], wordLength);
+                    wordFound = findWord(6, j, i, wordLength);
                 }
 
                 if ((((j % columnCount) + 1) >= wordLength) &&
                     (letters.charAt(j - 1) == secondChar)) {
 
                     // Eligible for a 9:00 hour hand walk
-                    wordFound = findWord(7, j, words[i], wordLength);
+                    wordFound = findWord(7, j, i, wordLength);
                 }
 
                 if ((((j % columnCount) + 1) >= wordLength) &&
                     ((parseInt(j / columnCount) + 1 - wordLength) >= 0) && (letters.charAt(j - columnCount - 1) == secondChar)) {
 
                     // Eligible for a 10:30 hour hand walk
-                    wordFound = findWord(8, j, words[i], wordLength);
+                    wordFound = findWord(8, j, i, wordLength);
                 }
             }
         }
     }
 }
 
-function findWord(direction, index, word, wordLength) {
+function findWord(direction, index, wordIndex, wordLength) {
 
     var wordFound = false;
+    var word = words[wordIndex];
 
     var checkNext = true;
     var nextIndex = 2;
@@ -898,8 +910,16 @@ function findWord(direction, index, word, wordLength) {
             if (nextIndex == wordLength) {
                 wordFound = true;
                 checkNext = false;
+
+                var lower = (counter < index) ? counter : index;
+                var upper = (counter < index) ? index : counter;
+ 
+                solution[lower + " " + upper] = wordIndex;
+                console.log("Adding " + lower + " " + upper + " for " + words[solution[lower + " " + upper]]);
+                /*
                 solution[counter + " " + index] = word;
                 solution[index + " " + counter] = word;
+                */
             }
 
             switch (direction) {
